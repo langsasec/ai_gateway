@@ -1,0 +1,12 @@
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.workbuddy/
+.git/
+.gitignore
+.env
+*.md
+start.bat
+logs/
+.dockerignore

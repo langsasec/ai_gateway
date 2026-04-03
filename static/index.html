@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI大模型API网关 - 管理后台</title>
+  <script src="/static/js/echarts.min.js"></script>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <style>
+    body { background: #f0f2f5; }
+    /* ====== 侧边导航 ====== */
+    .layout { display: flex; min-height: 100vh; }
+    .sidebar {
+      width: 220px; flex-shrink: 0;
+      background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
+      display: flex; flex-direction: column;
+      position: fixed; top: 0; left: 0; bottom: 0;
+      z-index: 100;
+    }
+    .sidebar-logo {
+      padding: 24px 20px 20px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .sidebar-logo .logo-icon { font-size: 28px; }
+    .sidebar-logo .logo-text {
+      display: block; font-size: 14px; font-weight: 700;
+      color: #fff; margin-top: 8px; letter-spacing: 0.5px;
+    }
+    .sidebar-logo .logo-sub {
+      font-size: 11px; color: rgba(255,255,255,0.4); margin-top: 2px;
+    }
+    .nav-menu { flex: 1; padding: 16px 0; overflow-y: auto; }
+    .nav-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 11px 20px; cursor: pointer;
+      color: rgba(255,255,255,0.6); font-size: 14px;
+      transition: all 0.2s; margin: 2px 8px; border-radius: 8px;
+    }
+    .nav-item:hover { background: rgba(255,255,255,0.08); color: #fff; }
+    .nav-item.active { background: linear-gradient(135deg,#667eea,#764ba2); color: #fff; }
+    .nav-item .nav-icon { font-size: 16px; width: 20px; text-align: center; }
+    .sidebar-footer {
+      padding: 16px 20px;
+      border-top: 1px solid rgba(255,255,255,0.08);
+    }
+    .sidebar-footer .user-name { color: rgba(255,255,255,0.7); font-size: 13px; }
+    .sidebar-footer .logout-btn {
+      color: rgba(255,255,255,0.4); font-size: 12px;
+      cursor: pointer; margin-top: 4px; display: inline-block;
+    }
+    .sidebar-footer .logout-btn:hover { color: #ff6b6b; }
+
+    /* ====== 主内容区 ====== */
+    .main { margin-left: 220px; min-height: 100vh; display: flex; flex-direction: column; width: calc(100% - 220px); min-width: 0; }
+    .main > .panel { flex: 1; }
+    .topbar {
+      height: 56px; background: #fff;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 24px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+      position: sticky; top: 0; z-index: 50;
+    }
+    .topbar-title { font-size: 16px; font-weight: 600; color: #333; }
+    .topbar-right { display: flex; align-items: center; gap: 14px; }
+    .topbar-badge {
+      background: #f0f2f5; border-radius: 20px;
+      padding: 4px 12px; font-size: 13px; color: #666;
+    }
+    .content { flex: 1; padding: 24px; }
+
+    /* ====== 面板切换 ====== */
+    .panel { display: none; }
+    .panel.active { display: block; }
+
+    /* ====== 统计卡片 ====== */
+    .stats-grid {
+      display: grid; grid-template-columns: repeat(4,1fr); gap: 16px; margin-bottom: 20px;
+    }
+    .stat-card {
+      background: #fff; border-radius: 10px;
+      padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+      display: flex; align-items: center; gap: 14px;
+    }
+    .stat-icon {
+      width: 48px; height: 48px; border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px; flex-shrink: 0;
+    }
+    .s1 { background: linear-gradient(135deg,#667eea,#764ba2); }
+    .s2 { background: linear-gradient(135deg,#f093fb,#f5576c); }
+    .s3 { background: linear-gradient(135deg,#43e97b,#38f9d7); }
+    .s4 { background: linear-gradient(135deg,#4facfe,#00f2fe); }
+    .stat-value { font-size: 26px; font-weight: 700; color: #1a1a2e; }
+    .stat-label { font-size: 13px; color: #888; margin-top: 2px; }
+
+    /* ====== 趋势图区域 ====== */
+    .chart-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; margin-bottom: 20px; }
+    .chart-box {
+      background: #fff; border-radius: 10px; padding: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    }
+    .chart-title { font-size: 15px; font-weight: 600; margin-bottom: 14px; color: #333; }
+    .model-list-item {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 0; border-bottom: 1px solid #f5f5f5;
+    }
+    .model-list-item:last-child { border-bottom: none; }
+    .model-bar-wrap { flex: 1; margin: 0 12px; }
+    .model-bar {
+      height: 8px; border-radius: 4px;
+      background: linear-gradient(90deg,#667eea,#764ba2);
+    }
+
+    /* ====== 通用工具栏 ====== */
+    .toolbar {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 16px; flex-wrap: wrap; gap: 10px;
+    }
+    .toolbar-left { display: flex; gap: 8px; flex-wrap: wrap; }
+    .search-box {
+      padding: 7px 12px; border: 1px solid #e0e0e0; border-radius: 6px;
+      font-size: 13px; outline: none; width: 200px;
+    }
+    .search-box:focus { border-color: #667eea; box-shadow: 0 0 0 2px rgba(102,126,234,0.15); }
+    select.form-select {
+      padding: 7px 12px; border: 1px solid #e0e0e0; border-radius: 6px;
+      font-size: 13px; outline: none; background: #fff; cursor: pointer;
+    }
+
+    /* ====== 表格 ====== */
+    .card { background: #fff; border-radius: 10px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .table th {
+      background: #fafafa; padding: 11px 14px; text-align: left;
+      font-weight: 600; color: #555; border-bottom: 1px solid #eee;
+      white-space: nowrap;
+    }
+    .table td { padding: 10px 14px; border-bottom: 1px solid #f5f5f5; vertical-align: middle; }
+    .table tr:last-child td { border-bottom: none; }
+    .table tr:hover td { background: #fafbff; }
+    .code { font-family: 'Courier New', monospace; font-size: 12px; background: #f5f5f5; padding: 2px 6px; border-radius: 4px; }
+
+    /* ====== 标签 ====== */
+    .tag { display:inline-block; padding:2px 8px; border-radius:4px; font-size:12px; font-weight:500; }
+    .tag-success { background:#f0fff4; color:#22c55e; border:1px solid #bbf7d0; }
+    .tag-error   { background:#fff1f2; color:#ef4444; border:1px solid #fecaca; }
+    .tag-warning { background:#fffbeb; color:#f59e0b; border:1px solid #fde68a; }
+    .tag-info    { background:#eff6ff; color:#3b82f6; border:1px solid #bfdbfe; }
+    .tag-purple  { background:#f5f3ff; color:#8b5cf6; border:1px solid #ddd6fe; }
+
+    /* ====== 按钮 ====== */
+    .btn { padding:7px 14px; border:none; border-radius:6px; font-size:13px; cursor:pointer; font-weight:500; transition:all 0.2s; display:inline-flex; align-items:center; gap:5px; }
+    .btn-primary { background:linear-gradient(135deg,#667eea,#764ba2); color:#fff; }
+    .btn-primary:hover { opacity:0.9; transform:translateY(-1px); }
+    .btn-outline { background:#fff; border:1px solid #e0e0e0; color:#555; }
+    .btn-outline:hover { border-color:#667eea; color:#667eea; }
+    .btn-danger { background:#fff1f2; color:#ef4444; border:1px solid #fecaca; }
+    .btn-danger:hover { background:#ef4444; color:#fff; }
+    .btn-sm { padding:4px 10px; font-size:12px; }
+
+    /* ====== 分页 ====== */
+    .pagination { display:flex; gap:4px; margin-top:16px; justify-content:flex-end; align-items:center; flex-wrap:wrap; }
+    .page-btn {
+      min-width:32px; height:32px; padding:0 10px;
+      border:1px solid #e0e0e0; border-radius:6px;
+      background:#fff; color:#555; font-size:13px; cursor:pointer;
+      transition: all 0.15s;
+    }
+    .page-btn.active { background:linear-gradient(135deg,#667eea,#764ba2); color:#fff; border-color:transparent; font-weight:600; }
+    .page-btn:hover:not(.active):not(.disabled) { border-color:#667eea; color:#667eea; }
+    .page-btn.disabled { color:#ccc; cursor:default; pointer-events:none; }
+    .page-ellipsis { min-width:32px; height:32px; display:inline-flex; align-items:center; justify-content:center; color:#aaa; font-size:13px; }
+    .page-info { color:#888; font-size:13px; }
+
+    /* ====== 模态框 ====== */
+    .modal-overlay {
+      display:none; position:fixed; inset:0;
+      background:rgba(0,0,0,0.45); z-index:200;
+      align-items:center; justify-content:center;
+    }
+    .modal-overlay.show { display:flex; }
+    .modal-box {
+      background:#fff; border-radius:12px; width:540px;
+      max-height:85vh; overflow:hidden;
+      display:flex; flex-direction:column;
+      box-shadow:0 20px 60px rgba(0,0,0,0.3);
+    }
+    .modal-head {
+      padding:18px 24px; border-bottom:1px solid #eee;
+      display:flex; justify-content:space-between; align-items:center;
+      flex-shrink:0;
+    }
+    .modal-head h3 { font-size:16px; font-weight:600; color:#1a1a2e; }
+    .modal-close { font-size:20px; cursor:pointer; color:#aaa; line-height:1; }
+    .modal-close:hover { color:#333; }
+    .modal-body { padding:24px; overflow-y:auto; flex:1; }
+    .modal-footer { padding:16px 24px; border-top:1px solid #eee; display:flex; justify-content:flex-end; gap:10px; flex-shrink:0; }
+    .form-group { margin-bottom:16px; }
+    .form-label { display:block; font-size:13px; font-weight:500; color:#555; margin-bottom:6px; }
+    .form-control {
+      width:100%; padding:8px 12px; border:1px solid #e0e0e0; border-radius:6px;
+      font-size:13px; outline:none; transition:all 0.2s;
+    }
+    .form-control:focus { border-color:#667eea; box-shadow:0 0 0 2px rgba(102,126,234,0.15); }
+    .form-hint { font-size:12px; color:#aaa; margin-top:4px; }
+    .form-row { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+
+    /* ====== 空状态 ====== */
+    .empty-state { text-align:center; padding:50px 20px; color:#aaa; }
+    .empty-state .empty-icon { font-size:48px; margin-bottom:12px; }
+    .empty-state p { font-size:14px; }
+
+    /* ====== 日志详情 ====== */
+    .detail-row { display:flex; padding:10px 0; border-bottom:1px solid #f5f5f5; font-size:13px; }
+    .detail-row:last-child { border-bottom:none; }
+    .detail-key { width:120px; flex-shrink:0; color:#888; font-weight:500; }
+    .detail-val { flex:1; color:#333; word-break:break-all; }
+    .detail-pre {
+      background:#f8f9fa; border-radius:6px; padding:10px 12px;
+      font-size:12px; font-family:'Courier New',monospace;
+      white-space:pre-wrap; max-height:200px; overflow-y:auto;
+      margin-top:8px;
+    }
+
+    /* ====== Toast ====== */
+    #toast {
+      position:fixed; bottom:32px; left:50%; transform:translateX(-50%) translateY(80px);
+      background:#1a1a2e; color:#fff; padding:10px 22px; border-radius:24px;
+      font-size:14px; z-index:9999; transition:transform 0.3s;
+      pointer-events:none; white-space:nowrap;
+    }
+    #toast.show { transform:translateX(-50%) translateY(0); }
+
+    /* ====== 响应式 ====== */
+    @media(max-width:900px) {
+      .stats-grid { grid-template-columns:1fr 1fr; }
+      .chart-grid { grid-template-columns:1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="layout">
+  <!-- 侧边栏 -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <span class="logo-icon">🤖</span>
+      <span class="logo-text">AI大模型API网关</span>
+      <div class="logo-sub">管理控制台 v1.0</div>
+    </div>
+    <nav class="nav-menu">
+      <div class="nav-item" data-panel="dashboard">
+        <span class="nav-icon">📊</span> 控制台
+      </div>
+      <div class="nav-item" data-panel="llm">
+        <span class="nav-icon">🧠</span> 大模型配置
+      </div>
+      <div class="nav-item" data-panel="apikey">
+        <span class="nav-icon">🔑</span> API密钥管理
+      </div>
+      <div class="nav-item" data-panel="sensitive">
+        <span class="nav-icon">🛡️</span> 敏感词管理
+      </div>
+      <div class="nav-item" data-panel="logs">
+        <span class="nav-icon">📋</span> 请求日志审计
+      </div>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="user-name">👤 <span id="sidebarUsername">admin</span></div>
+      <div style="margin-top:8px;display:flex;gap:12px">
+        <span class="logout-btn" onclick="openChangePasswordModal()" style="cursor:pointer">修改密码</span>
+        <span class="logout-btn" onclick="logout()">退出登录</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- 主内容 -->
+  <main class="main">
+    <div class="topbar">
+      <span class="topbar-title" id="topbarTitle">控制台</span>
+      <div class="topbar-right">
+        <span class="topbar-badge" id="topbarBadge">今日运行正常</span>
+      </div>
+    </div>
+    <div class="content">
+
+      <!-- ===== 控制台面板 ===== -->
+      <div class="panel" id="panel-dashboard">
+        <!-- 统计卡片 -->
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-icon s1">📈</div>
+            <div><div class="stat-value" id="stat-today">-</div><div class="stat-label">今日请求数</div></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon s2">🔑</div>
+            <div><div class="stat-value" id="stat-keys">-</div><div class="stat-label">有效密钥数</div></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon s3">✅</div>
+            <div><div class="stat-value" id="stat-success">-</div><div class="stat-label">近7日成功率</div></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon s4">⚠️</div>
+            <div><div class="stat-value" id="stat-sensitive">-</div><div class="stat-label">近7日敏感触发</div></div>
+          </div>
+        </div>
+
+        <!-- Token统计 -->
+        <div class="stats-grid" style="margin-bottom:20px">
+          <div class="stat-card" style="border-left:3px solid #667eea">
+            <div><div class="stat-value" id="stat-input-tokens" style="font-size:22px">-</div><div class="stat-label">近7日输入Token</div></div>
+          </div>
+          <div class="stat-card" style="border-left:3px solid #f093fb">
+            <div><div class="stat-value" id="stat-output-tokens" style="font-size:22px">-</div><div class="stat-label">近7日输出Token</div></div>
+          </div>
+          <div class="stat-card" style="border-left:3px solid #43e97b">
+            <div><div class="stat-value" id="stat-total-tokens" style="font-size:22px">-</div><div class="stat-label">近7日总Token</div></div>
+          </div>
+          <div class="stat-card" style="border-left:3px solid #fbbf24">
+            <div><div class="stat-value" id="stat-avg-tokens" style="font-size:22px">-</div><div class="stat-label">平均每请求Token</div></div>
+          </div>
+        </div>
+
+        <!-- 趋势图 + 模型排行 -->
+        <div class="chart-grid">
+          <div class="chart-box">
+            <div class="chart-title">近7日请求趋势</div>
+            <div id="trendChart" style="width:100%;height:260px"></div>
+          </div>
+          <div class="chart-box">
+            <div class="chart-title">热门模型排行</div>
+            <div id="modelRankList">
+              <div class="empty-state"><p>加载中…</p></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Token趋势 + 状态分布 + 敏感词Top -->
+        <div class="chart-grid" style="grid-template-columns: 2fr 1fr 1.2fr">
+          <div class="chart-box">
+            <div class="chart-title">近7日Token使用趋势</div>
+            <div id="tokenChart" style="width:100%;height:260px"></div>
+          </div>
+          <div class="chart-box">
+            <div class="chart-title">请求状态分布</div>
+            <div id="statusChart" style="width:100%;height:260px"></div>
+          </div>
+          <div class="chart-box">
+            <div class="chart-title">敏感词触发排行</div>
+            <div id="sensitiveTopList">
+              <div class="empty-state"><p>加载中…</p></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Token用量排行 -->
+        <div class="chart-grid" style="grid-template-columns: 1fr 1fr;margin-top:0">
+          <div class="chart-box">
+            <div class="chart-title">Token用量 Top5 密钥</div>
+            <div id="tokenTopKeysList">
+              <div class="empty-state"><p>加载中…</p></div>
+            </div>
+          </div>
+          <div class="chart-box">
+            <div class="chart-title">全局Token用量</div>
+            <div id="globalTokenStats">
+              <div class="empty-state"><p>加载中…</p></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== 大模型配置面板 ===== -->
+      <div class="panel" id="panel-llm">
+        <div class="card">
+          <div class="toolbar">
+            <div class="toolbar-left">
+              <input class="search-box" id="llmSearch" placeholder="🔍 搜索模型名/地址…" oninput="searchLLM()">
+            </div>
+            <button class="btn btn-primary" onclick="openLLMModal()">➕ 添加模型</button>
+          </div>
+          <div class="table-container">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>ID</th><th>模型名称</th><th>API地址</th><th>状态</th><th>创建时间</th><th>操作</th>
+                </tr>
+              </thead>
+              <tbody id="llmTable"><tr><td colspan="6" style="text-align:center;color:#aaa;padding:32px">加载中…</td></tr></tbody>
+            </table>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px">
+            <span class="page-info" id="llmTotal"></span>
+            <div class="pagination" id="llmPagination"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== API密钥管理面板 ===== -->
+      <div class="panel" id="panel-apikey">
+        <div class="card">
+          <div class="toolbar">
+            <div class="toolbar-left">
+              <input class="search-box" id="keySearch" placeholder="🔍 搜索用户名…" oninput="searchKeys()">
+              <select class="form-select" id="keyStatusFilter" onchange="searchKeys()">
+                <option value="">全部状态</option>
+                <option value="1">启用</option>
+                <option value="0">禁用</option>
+              </select>
+            </div>
+            <button class="btn btn-primary" onclick="openKeyModal()">➕ 创建密钥</button>
+          </div>
+          <div class="table-container">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>密钥（脱敏）</th><th>用户名</th><th>日限额</th><th>QPS</th><th>Token用量</th><th>状态</th><th>使用次数</th><th>最后使用</th><th>操作</th>
+                </tr>
+              </thead>
+              <tbody id="keyTable"><tr><td colspan="9" style="text-align:center;color:#aaa;padding:32px">加载中…</td></tr></tbody>
+            </table>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px">
+            <span class="page-info" id="keyTotal"></span>
+            <div class="pagination" id="keyPagination"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== 敏感词管理面板 ===== -->
+      <div class="panel" id="panel-sensitive">
+        <div class="card">
+          <div class="toolbar">
+            <div class="toolbar-left">
+              <input class="search-box" id="sensitiveSearch" placeholder="🔍 搜索敏感词…" oninput="filterSensitive()">
+              <select class="form-select" id="sensitiveTypeFilter" onchange="filterSensitive()">
+                <option value="">全部类型</option>
+                <option value="violence">暴力</option>
+                <option value="pornography">色情</option>
+                <option value="terrorism">恐怖主义</option>
+                <option value="fraud">诈骗</option>
+                <option value="drugs">毒品</option>
+                <option value="gambling">赌博</option>
+                <option value="political">政治敏感</option>
+                <option value="general">通用</option>
+              </select>
+            </div>
+            <button class="btn btn-primary" onclick="openSensitiveModal()">➕ 添加敏感词</button>
+          </div>
+          <div class="table-container">
+            <table class="table">
+              <thead>
+                <tr><th>ID</th><th>词语 / 正则</th><th>类型</th><th>正则</th><th>添加时间</th><th>操作</th></tr>
+              </thead>
+              <tbody id="sensitiveTable"><tr><td colspan="6" style="text-align:center;color:#aaa;padding:32px">加载中…</td></tr></tbody>
+            </table>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px">
+            <span class="page-info" id="sensitiveTotal"></span>
+            <div class="pagination" id="sensitivePagination"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== 请求日志面板 ===== -->
+      <div class="panel" id="panel-logs">
+        <div class="card">
+          <div class="toolbar">
+            <div class="toolbar-left">
+              <input class="search-box" id="logKeySearch" placeholder="🔍 密钥/用户名…" style="width:140px">
+              <input class="search-box" id="logIpSearch" placeholder="🌐 IP地址…" style="width:120px">
+              <input class="search-box" id="logStartTime" type="datetime-local" title="开始时间" style="width:170px;font-size:12px">
+              <span style="color:#aaa;font-size:12px">~</span>
+              <input class="search-box" id="logEndTime" type="datetime-local" title="结束时间" style="width:170px;font-size:12px">
+              <select class="form-select" id="logStatusFilter">
+                <option value="">全部状态</option>
+                <option value="success">成功</option>
+                <option value="failed">失败</option>
+                <option value="blocked">拦截</option>
+              </select>
+              <select class="form-select" id="logModelFilter">
+                <option value="">全部模型</option>
+              </select>
+              <label style="font-size:13px;display:flex;align-items:center;gap:5px;cursor:pointer;">
+                <input type="checkbox" id="sensitiveOnly"> 仅敏感
+              </label>
+              <button class="btn btn-outline btn-sm" onclick="searchLogs()">查询</button>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <button class="btn btn-outline btn-sm" onclick="openLogCleanupModal()">🗑️ 清理过期</button>
+              <button class="btn btn-outline btn-sm" onclick="openLogBatchDeleteModal()">批量删除</button>
+              <button class="btn btn-outline btn-sm" onclick="openLogRetentionModal()">⚙️ 保留策略</button>
+              <button class="btn btn-outline btn-sm" onclick="exportLogs()">⬇️ 导出</button>
+            </div>
+          </div>
+          <div class="table-container">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>时间</th><th>密钥</th><th>用户</th><th>IP</th><th>模型</th>
+                  <th>Tokens(in/out)</th><th>状态</th><th>敏感</th><th>操作</th>
+                </tr>
+              </thead>
+              <tbody id="logTable"><tr><td colspan="9" style="text-align:center;color:#aaa;padding:32px">加载中…</td></tr></tbody>
+            </table>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px">
+            <span class="page-info" id="logTotal">共 0 条</span>
+            <div class="pagination" id="logPagination"></div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /content -->
+
+    <footer style="text-align:center;padding:16px 0;color:var(--text-tertiary,#999);font-size:12px;border-top:1px solid var(--border-color,#eee);flex-shrink:0;">
+      AI大模型API网关 &copy; 2025 All Rights Reserved
+    </footer>
+  </main>
+</div>
+
+<!-- ===== 大模型配置 Modal ===== -->
+<div class="modal-overlay" id="llmModal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h3 id="llmModalTitle">添加大模型</h3>
+      <span class="modal-close" onclick="closeLLMModal()">✕</span>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="llmId">
+      <div class="form-group">
+        <label class="form-label">模型名称 *</label>
+        <input type="text" class="form-control" id="llmName" placeholder="如：gpt-4, qwen-turbo">
+      </div>
+      <div class="form-group">
+        <label class="form-label">API地址 *</label>
+        <input type="text" class="form-control" id="llmApiUrl" placeholder="如：https://api.openai.com/v1/chat/completions">
+      </div>
+      <div class="form-group">
+        <label class="form-label">官方API Key *</label>
+        <input type="password" class="form-control" id="llmApiKey" placeholder="官方密钥，加密存储">
+        <div class="form-hint">密钥存储于服务端，客户端不可见</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">状态</label>
+        <select class="form-control" id="llmStatus">
+          <option value="1">启用</option>
+          <option value="0">禁用</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeLLMModal()">取消</button>
+      <button class="btn btn-primary" onclick="saveLLMConfig()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== API密钥 Modal ===== -->
+<div class="modal-overlay" id="keyModal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h3 id="keyModalTitle">创建API密钥</h3>
+      <span class="modal-close" onclick="closeKeyModal()">✕</span>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="keyId">
+      <div class="form-group">
+        <label class="form-label">用户/部门名称</label>
+        <input type="text" class="form-control" id="keyUserName" placeholder="如：产品组-张三">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">QPS限制</label>
+          <input type="number" class="form-control" id="keyRateLimit" value="10" min="1" max="1000">
+        </div>
+        <div class="form-group">
+          <label class="form-label">日调用上限</label>
+          <input type="number" class="form-control" id="keyDailyLimit" value="1000" min="1">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">月调用上限</label>
+        <input type="number" class="form-control" id="keyMonthlyLimit" value="30000" min="1">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Token用量限额</label>
+        <input type="number" class="form-control" id="keyTokenLimit" value="0" min="0" placeholder="0表示不限制">
+        <div class="form-hint">该密钥可使用的总Token上限（输入+输出），0 表示不限</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">有效期（留空为永久）</label>
+        <input type="datetime-local" class="form-control" id="keyExpireTime">
+      </div>
+      <div class="form-group">
+        <label class="form-label">IP白名单（每行一个，留空不限）</label>
+        <textarea class="form-control" id="keyIpWhitelist" rows="3" placeholder="192.168.1.1&#10;10.0.0.0"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">允许调用的模型</label>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <span style="font-size:12px;color:#f59e0b;background:#fffbeb;border:1px solid #fcd34d;border-radius:4px;padding:2px 8px;">
+            ⚠️ 不勾选任何模型 = 允许使用<strong>全部</strong>模型；勾选后仅限勾选的模型
+          </span>
+          <div style="display:flex;gap:6px;margin-left:8px">
+            <button type="button" class="btn btn-outline btn-sm" onclick="document.querySelectorAll('input[name=llmCheck]').forEach(c=>c.checked=true)" style="font-size:11px;padding:2px 8px">全选</button>
+            <button type="button" class="btn btn-outline btn-sm" onclick="document.querySelectorAll('input[name=llmCheck]').forEach(c=>c.checked=false)" style="font-size:11px;padding:2px 8px">全不选</button>
+          </div>
+        </div>
+        <div id="keyLlmCheckboxes" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeKeyModal()">取消</button>
+      <button class="btn btn-primary" onclick="saveKey()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 密钥创建成功 Modal（显示密钥+复制） ===== -->
+<div class="modal-overlay" id="keyCreatedModal" onclick="if(event.target===this)this.classList.remove('show')">
+  <div class="modal-box" style="width:520px">
+    <div class="modal-head">
+      <h3>🎉 密钥创建成功</h3>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:14px;color:#888;margin-bottom:12px">请立即复制并妥善保存，关闭后不再显示完整密钥。</p>
+      <div style="position:relative">
+        <input type="text" class="form-control" id="createdKeyValue" readonly
+          style="font-family:monospace;font-size:14px;background:#f8f9fa;padding-right:80px;cursor:text">
+        <button type="button" id="copyKeyBtn" onclick="copyCreatedKey()"
+          style="position:absolute;right:6px;top:50%;transform:translateY(-50%);
+                 background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border:none;
+                 padding:6px 16px;border-radius:6px;font-size:13px;cursor:pointer;white-space:nowrap;
+                 transition:opacity .2s">
+          📋 复制
+        </button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="document.getElementById('keyCreatedModal').classList.remove('show')">我已保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 敏感词 Modal ===== -->
+<div class="modal-overlay" id="sensitiveModal">
+  <div class="modal-box" style="width:460px">
+    <div class="modal-head">
+      <h3>添加敏感词 / 正则</h3>
+      <span class="modal-close" onclick="closeSensitiveModal()">✕</span>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">词语 / 正则表达式 *</label>
+        <input type="text" class="form-control" id="sensitiveWord" placeholder="输入敏感词或正则，如 \b1[3-9]\d{9}\b">
+        <div id="regexHint" style="display:none;margin-top:4px;font-size:12px;color:#888">
+          支持 Python re 语法，不区分大小写，如 <code style="background:#f3f4f6;padding:1px 4px;border-radius:3px">b[i1]+t[c(]h</code>
+        </div>
+      </div>
+      <div class="form-group">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none">
+          <input type="checkbox" id="sensitiveIsRegex" onchange="toggleRegexHint(this.checked)" style="width:16px;height:16px;cursor:pointer">
+          <span style="font-size:14px;font-weight:500">作为正则表达式匹配</span>
+        </label>
+      </div>
+      <div class="form-group">
+        <label class="form-label">类型</label>
+        <select class="form-control" id="sensitiveType">
+          <option value="general">通用</option>
+          <option value="violence">暴力</option>
+          <option value="pornography">色情</option>
+          <option value="terrorism">恐怖主义</option>
+          <option value="fraud">诈骗</option>
+          <option value="drugs">毒品</option>
+          <option value="gambling">赌博</option>
+          <option value="political">政治敏感</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeSensitiveModal()">取消</button>
+      <button class="btn btn-primary" onclick="saveSensitiveWord()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 修改密码 Modal ===== -->
+<div class="modal-overlay" id="changePasswordModal">
+  <div class="modal-box" style="width:420px">
+    <div class="modal-head">
+      <h3>修改密码</h3>
+      <span class="modal-close" onclick="closeChangePasswordModal()">✕</span>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">原密码 *</label>
+        <input type="password" class="form-control" id="oldPassword" placeholder="请输入当前密码">
+      </div>
+      <div class="form-group">
+        <label class="form-label">新密码 *</label>
+        <input type="password" class="form-control" id="newPassword" placeholder="至少6位">
+        <div class="form-hint">密码长度至少6个字符</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">确认新密码 *</label>
+        <input type="password" class="form-control" id="confirmPassword" placeholder="再次输入新密码">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeChangePasswordModal()">取消</button>
+      <button class="btn btn-primary" onclick="doChangePassword()">确认修改</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 敏感词详情 Modal ===== -->
+<div class="modal-overlay" id="sensitiveDetailModal">
+  <div class="modal-box" style="width:560px">
+    <div class="modal-head">
+      <h3>敏感词详情</h3>
+      <span class="modal-close" onclick="closeSensitiveDetailModal()">✕</span>
+    </div>
+    <div class="modal-body" id="sensitiveDetailContent"></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeSensitiveDetailModal()">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 日志详情 Modal ===== -->
+<div class="modal-overlay" id="logDetailModal">
+  <div class="modal-box" style="width:680px">
+    <div class="modal-head">
+      <h3>请求日志详情</h3>
+      <span class="modal-close" onclick="closeLogDetailModal()">✕</span>
+    </div>
+    <div class="modal-body" id="logDetailContent"></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeLogDetailModal()">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 日志保留策略 Modal ===== -->
+<div class="modal-overlay" id="logRetentionModal">
+  <div class="modal-box" style="width:480px">
+    <div class="modal-head">
+      <h3>日志保留策略</h3>
+      <span class="modal-close" onclick="closeLogRetentionModal()">✕</span>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">日志保留天数</label>
+        <input type="number" class="form-control" id="retentionDays" min="1" max="3650" placeholder="如 30、90、365">
+        <div class="form-hint">超过保留期的日志将被自动清理。系统每小时自动执行一次清理。</div>
+      </div>
+      <div style="margin-top:14px;padding:14px;background:#f8f9fa;border-radius:8px;font-size:13px;color:#666">
+        <div style="margin-bottom:6px;font-weight:600;color:#333">当前状态</div>
+        <div id="retentionInfo">加载中…</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeLogRetentionModal()">取消</button>
+      <button class="btn btn-primary" onclick="saveLogRetention()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 清理过期日志确认 Modal ===== -->
+<div class="modal-overlay" id="logCleanupModal">
+  <div class="modal-box" style="width:440px">
+    <div class="modal-head">
+      <h3>清理过期日志</h3>
+      <span class="modal-close" onclick="closeLogCleanupModal()">✕</span>
+    </div>
+    <div class="modal-body" id="logCleanupContent" style="text-align:center;padding:20px">
+      <div style="font-size:48px;margin-bottom:12px">🗑️</div>
+      <p style="font-size:14px;color:#333;margin-bottom:8px" id="cleanupMessage">加载中…</p>
+      <p style="font-size:13px;color:#999">此操作不可撤销</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeLogCleanupModal()">取消</button>
+      <button class="btn btn-danger" onclick="executeCleanup()">确认清理</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 批量删除日志 Modal ===== -->
+<div class="modal-overlay" id="logBatchDeleteModal">
+  <div class="modal-box" style="width:500px">
+    <div class="modal-head">
+      <h3>批量删除日志</h3>
+      <span class="modal-close" onclick="closeLogBatchDeleteModal()">✕</span>
+    </div>
+    <div class="modal-body">
+      <div style="margin-bottom:16px;padding:10px 14px;background:#fff7ed;border:1px solid #fde68a;border-radius:8px;font-size:13px;color:#92400e">
+        ⚠️ 批量删除不可撤销，请谨慎操作！建议先导出需要的日志。
+      </div>
+      <div class="form-group">
+        <label class="form-label">删除该时间之前的日志</label>
+        <input type="date" class="form-control" id="batchDeleteBefore">
+        <div class="form-hint">留空则不按时间筛选</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">只删除指定状态（可选）</label>
+        <select class="form-control" id="batchDeleteStatus">
+          <option value="">全部状态</option>
+          <option value="success">成功</option>
+          <option value="failed">失败</option>
+          <option value="blocked">拦截</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeLogBatchDeleteModal()">取消</button>
+      <button class="btn btn-danger" onclick="executeBatchDelete()">确认删除</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<script src="/static/js/app.js?v=17"></script>
+</body>
+</html>

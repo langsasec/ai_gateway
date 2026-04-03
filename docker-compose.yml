@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  # PostgreSQL数据库
+  postgres:
+    image: postgres:14-alpine
+    environment:
+      POSTGRES_DB: ai_gateway
+      POSTGRES_USER: ai_gateway
+      POSTGRES_PASSWORD: DockerGw2026
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ai_gateway -d ai_gateway -h postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # AI网关应用
+  ai-gateway:
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://ai_gateway:DockerGw2026@postgres:5432/ai_gateway
+      SECRET_KEY: your-secret-key-change-in-production
+      ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: "1440"
+      DEBUG: "false"
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./logs:/app/logs
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
