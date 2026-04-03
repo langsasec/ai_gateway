@@ -351,6 +351,13 @@ class LLMService:
             # 构建请求体
             request_data = request.dict(exclude_none=True)
             
+            # 请求上游在流式响应末尾返回 usage 信息
+            # OpenAI / qwen 等多数模型支持 stream_options.include_usage
+            if request_data.get("stream") and isinstance(request_data.get("stream_options"), dict):
+                request_data["stream_options"]["include_usage"] = True
+            elif request_data.get("stream"):
+                request_data["stream_options"] = {"include_usage": True}
+            
             # 构建请求URL
             base_url = llm_config["api_url"].rstrip("/")
             if not base_url.endswith("/chat/completions"):
@@ -478,6 +485,15 @@ class LLMService:
             try:
                 pt = log_context["prompt_tokens"] or 0
                 ct = log_context["completion_tokens"] or 0
+                # 兜底估算：如果上游未返回 usage，基于字符数粗略估算
+                # 中文约 1.5 字/token，英文约 4 字符/token，取中间值 ~2 字符/token
+                if pt == 0 and ct == 0:
+                    _prompt_text = log_context.get("prompt_content") or ""
+                    _resp_text = log_context.get("response_content") or ""
+                    pt = max(1, len(_prompt_text) // 2) if _prompt_text else 0
+                    ct = max(1, len(_resp_text) // 2) if _resp_text else 0
+                    log_context["prompt_tokens"] = pt
+                    log_context["completion_tokens"] = ct
                 await update_api_key_usage(api_key_info["id"], prompt_tokens=pt, completion_tokens=ct)
             except Exception as usage_err:
                 print(f"[流式] 更新使用统计失败: {usage_err}")
